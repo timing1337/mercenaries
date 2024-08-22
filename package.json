@@ -1,0 +1,26 @@
+{
+  "name": "mercenaries",
+  "version": "1.0.0",
+  "description": "A minimal facebook chat bot",
+  "scripts": {
+    "start": "ts-node-dev --transpile-only src/index.ts",
+    "pretty": "prettier --write src/**/*.ts"
+  },
+  "author": "timing",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.4.2",
+    "@types/tough-cookie": "^4.0.5",
+    "prettier": "^3.3.3",
+    "prettier-plugin-organize-imports": "^4.0.0",
+    "ts-node-dev": "^2.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.7.4",
+    "axios-cookiejar-support": "^5.0.2",
+    "chalk": "^4.1.0",
+    "mqtt": "^5.10.0",
+    "tough-cookie": "^4.1.4",
+    "ws": "^8.18.0"
+  }
+}
