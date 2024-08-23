@@ -1,5 +1,5 @@
-import Command from '../command';
 import { MessageManager } from '../../manager/message_manager';
+import Command from '../command';
 
 export default class AboutCommand extends Command {
     public constructor() {

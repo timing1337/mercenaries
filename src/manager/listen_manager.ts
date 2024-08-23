@@ -1,12 +1,11 @@
 import * as mqtt from 'mqtt';
-import Logger from '../utils/log';
-import MercenariesBot from '../core';
-import ApiRequest from '../api/api';
 import { WebSocket } from 'ws';
-import ThreadManager from './thread_manager';
+import ApiRequest from '../api/api';
 import { TMSData } from '../api/mqtt/mqtt';
-import { EventManager } from './event_manager';
 import { EventType } from '../event/event_type';
+import Logger from '../utils/log';
+import { EventManager } from './event_manager';
+import ThreadManager from './thread_manager';
 
 const TOPICS = [
     '/legacy_web',
@@ -85,7 +84,7 @@ export class ListenManager {
                 pm: [],
                 s: sessionId,
                 st: TOPICS,
-                u: MercenariesBot.userId
+                u: ApiRequest.apiStorage.userId
             })
         });
         this.connection.on('connect', this.onConnect.bind(this));
@@ -129,7 +128,7 @@ export class ListenManager {
             max_deltas_able_to_process: 1000,
             delta_batch_size: 500,
             encoding: 'JSON',
-            entity_fbid: MercenariesBot.userId
+            entity_fbid: ApiRequest.apiStorage.userId
         } as any;
 
         if (!this.syncToken) {

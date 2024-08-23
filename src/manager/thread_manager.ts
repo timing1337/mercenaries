@@ -13,7 +13,8 @@ export default class ThreadManager {
         this.syncSequenceId = threadsData.sync_sequence_id;
         this.logger.debug(`There are currently ${threadsData.threads.filter((thread) => thread.thread_type == 'GROUP').length} groups`);
         for (const thread of threadsData.threads) {
-            this.threads.set(thread.id, thread);
+            this.logger.debug(`Thread #${thread.thread_key.thread_fbid}: ${thread.name}`);
+            this.threads.set(thread.thread_key.thread_fbid, thread);
         }
     }
 }

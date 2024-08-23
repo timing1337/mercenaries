@@ -1,9 +1,9 @@
-import axios, { Axios } from 'axios';
-import { readFileSync, writeFileSync } from 'fs';
+import axios from 'axios';
+import { readFileSync } from 'fs';
 import path from 'path';
 import { Cookie, CookieJar } from 'tough-cookie';
 import { URLSearchParams } from 'url';
-import MercenariesBot from '../core';
+import { URL } from '../utils/utils';
 import { DocumentId } from './document';
 
 type Credential = {
@@ -11,8 +11,25 @@ type Credential = {
     password: string;
 };
 
+type ApiStorage = {
+    jazoest: string;
+    lsd: string;
+    DTSGInitialData: string;
+    deviceId: string;
+    region: string;
+    userId: string;
+};
+
 export default class ApiRequest {
     public static readonly cookieJar: CookieJar = new CookieJar();
+    public static readonly apiStorage: ApiStorage = {
+        jazoest: '',
+        lsd: '',
+        DTSGInitialData: '',
+        deviceId: '',
+        region: '',
+        userId: ''
+    };
 
     public static async init() {
         axios.defaults.validateStatus = (status) => status >= 200 && status <= 500;
@@ -21,10 +38,10 @@ export default class ApiRequest {
     }
 
     public static async login(email: string, password: string) {
-        const data = await axios.get('https://www.messenger.com/', {});
+        const data = await axios.get(URL.MESSENGER_URL, {});
 
-        const jazoest = (data.data as string).match(/name="jazoest" value="(\d+)"/)![1];
-        const lsd = (data.data as string).match(/name="lsd" value="([^"]+)"/)![1];
+        ApiRequest.apiStorage.jazoest = (data.data as string).match(/name="jazoest" value="(\d+)"/)![1];
+        ApiRequest.apiStorage.lsd = (data.data as string).match(/name="lsd" value="([^"]+)"/)![1];
         const datr = (data.data as string).match(/"_js_datr","([^"]+)"/)![1];
         const initialRequestId = (data.data as string).match(/name="initial_request_id" value="([^"]+)"/)![1];
         const lgnrnd = (data.data as string).match(/name="lgnrnd" value="([^"]+)"/)![1];
@@ -35,7 +52,7 @@ export default class ApiRequest {
                 key: 'datr',
                 value: datr
             }),
-            'https://www.messenger.com/'
+            URL.MESSENGER_URL
         );
 
         this.cookieJar.setCookie(
@@ -43,7 +60,7 @@ export default class ApiRequest {
                 key: 'wd',
                 value: '727x730'
             }),
-            'https://www.messenger.com/'
+            URL.MESSENGER_URL
         );
 
         this.cookieJar.setCookie(
@@ -51,12 +68,12 @@ export default class ApiRequest {
                 key: 'dpr',
                 value: '1.25'
             }),
-            'https://www.messenger.com/'
+            URL.MESSENGER_URL
         );
 
         const postBody = {
-            jazoest: jazoest,
-            lsd: lsd,
+            jazoest: ApiRequest.apiStorage.jazoest,
+            lsd: ApiRequest.apiStorage.lsd,
             initial_request_id: initialRequestId,
             timezone: -420,
             lgndim: 'eyJ3IjoxNTM2LCJoIjo4NjQsImF3IjoxNTM2LCJhaCI6ODE2LCJjIjoyNH0=', //base64 of some random ass data but whatever lol
@@ -66,39 +83,37 @@ export default class ApiRequest {
             pass: password,
             default_persistent: ''
         };
-        const result = await ApiRequest.post('https://www.messenger.com/login/password', postBody, true);
+
+        const result = await axios.post(URL.LOGIN_URL, new URLSearchParams(postBody as any).toString(), {
+            headers: {
+                Cookie: ApiRequest.getCookies()
+            },
+            maxRedirects: 0
+        });
+
         if (result.headers['set-cookie']) {
             for (const cookie of result.headers['set-cookie']) {
                 const cookieData = cookie.split(';').shift()!.split('=')!;
-                if (cookieData[0] == 'c_user') MercenariesBot.userId = cookieData[1];
-                this.cookieJar.setCookie(cookie, 'https://www.messenger.com');
+                if (cookieData[0] == 'c_user') ApiRequest.apiStorage.userId = cookieData[1];
+                this.cookieJar.setCookie(cookie, URL.MESSENGER_URL);
             }
         }
 
-        const reloadPage = await ApiRequest.get('https://www.messenger.com/');
+        const reloadPage = await ApiRequest.get(URL.MESSENGER_URL);
 
-        const DTSGInitialData = (reloadPage.data as string).match(/"DTSGInitialData",\[\],\{"token":"([^"]+)"/)![1];
-        const deviceId = (reloadPage.data as string).match(/"deviceId":"([^"]+)"/)![1];
-        const region = (reloadPage.data as string).match(/region=([a-zA-Z0-9]+)/)![1];
+        ApiRequest.apiStorage.DTSGInitialData = (reloadPage.data as string).match(/"DTSGInitialData",\[\],\{"token":"([^"]+)"/)![1];
+        ApiRequest.apiStorage.deviceId = (reloadPage.data as string).match(/"deviceId":"([^"]+)"/)![1];
+        ApiRequest.apiStorage.region = (reloadPage.data as string).match(/region=([a-zA-Z0-9]+)/)![1];
+    }
 
-        MercenariesBot.region = region;
-        MercenariesBot.dtsg = DTSGInitialData;
-        MercenariesBot.deviceId = deviceId;
+    public static getCookies() {
+        return this.cookieJar.getCookieStringSync(URL.MESSENGER_URL);
     }
 
     public static async get(url: string, ignoreRedirects: boolean = false) {
         return await axios.get(url, {
             headers: {
-                Cookie: this.cookieJar.getCookieStringSync(url)
-            },
-            maxRedirects: ignoreRedirects ? 0 : 5
-        });
-    }
-
-    public static async post(url: string, body: any, ignoreRedirects: boolean = false) {
-        return axios.post(url, new URLSearchParams(body).toString(), {
-            headers: {
-                Cookie: this.cookieJar.getCookieStringSync(url.replace('facebook.com', 'messenger.com'))
+                Cookie: ApiRequest.getCookies()
             },
             maxRedirects: ignoreRedirects ? 0 : 5
         });
@@ -106,10 +121,15 @@ export default class ApiRequest {
 
     public static async postWithGraphQL(documentId: DocumentId, variables: any) {
         const content = {
-            fb_dtsg: MercenariesBot.dtsg,
+            fb_dtsg: ApiRequest.apiStorage.DTSGInitialData,
             doc_id: documentId,
             variables: JSON.stringify(variables)
         };
-        return ApiRequest.post('https://www.messenger.com/api/graphql/', content);
+
+        return await axios.post(URL.GRAPH_QL_URL, new URLSearchParams(content).toString(), {
+            headers: {
+                Cookie: ApiRequest.getCookies()
+            }
+        });
     }
 }

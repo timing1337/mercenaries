@@ -1,6 +1,6 @@
 import axios from 'axios';
-import Command from '../command';
 import { MessageManager } from '../../manager/message_manager';
+import Command from '../command';
 
 export default class TraCuuDiemThiCommand extends Command {
     public constructor() {
