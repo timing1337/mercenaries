@@ -130,4 +130,5 @@ dist
 .pnp.*
 
 /credential.json
+/appstate.json
 /src/manager/defaults/ChatGPTCommand.ts
