@@ -46,6 +46,7 @@ export default class ApiRequest {
         if (appState) {
             for (let el of appState) {
                 const { key, value, expires, domain, path } = el;
+                if (key == 'c_user') ApiRequest.apiStorage.userId = value;
                 const cookie = `${key}=${value}; expires=${expires}; domain=${domain}; path=${path};`;
                 this.cookieJar.setCookieSync(cookie, `https://${domain}`);
             }
