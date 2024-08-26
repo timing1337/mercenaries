@@ -146,7 +146,7 @@ export interface EventReminders {
 export interface RtcCallData {
     call_state: string;
     server_info_data: string;
-    initiator: any;
+    initiator: UserId;
 }
 
 export interface MarketplaceThreadData {

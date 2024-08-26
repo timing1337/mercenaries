@@ -13,27 +13,49 @@ import {
     RtcMessageHeader,
     RtcSender,
     SessionDescription,
-    SyncPayload
+    SyncPayload,
+    UpdateRequest
 } from '../../codegen';
 import ApiRequest from '../api/api';
 import { DocumentId } from '../api/document';
 import { MessageType } from './message_type';
 
 export default class VoiceCallManager {
-    public static serverDataKey: string;
-    public static clientSessionId: number;
+    public static clientSessionId?: number;
 
     public static sequenceNumber: number = 0;
 
-    public static conferenceName?: string;
+    public static currentAttendingConferenceName?: string;
+    public static currentAtttendingThreadId?: string;
+
+    public static serverDataKey?: string;
+
+    //Reserved for ongoing calls
 
     public static sendRtcPacket(bodyType: MessageType, body: RtcMessageBody, callback?: (header: RtcMessageHeader, body: RtcMessageBody) => void) {
-        if (!this.clientSessionId) {
-            throw new Error('Client is not connected to any call');
-        }
+        if (!this.clientSessionId) throw new Error('Client is not connected to any call');
+
+        const sequence = this.sequenceNumber++;
+
+        const header = new RtcMessageHeader({
+            type: bodyType,
+            transactionId: (Math.floor(Math.random() * 90000000000) + 1).toString(),
+            clientSessionId: this.clientSessionId.toString(),
+            clientStack: 5,
+            sender: new RtcSender({
+                id: ApiRequest.apiStorage.userId
+            }),
+            sequenceNumber: sequence,
+            conferenceType: 15
+        });
+
+        if (this.serverDataKey) header.serverInfoData = this.serverDataKey;
+        if (this.currentAttendingConferenceName) header.conferenceName = this.currentAttendingConferenceName;
+
         const compactProtocol = new TCompactProtocol(
             new TFramedTransport(undefined, async function (outBuf) {
                 const output = outBuf!.slice(4);
+
                 const result = await ApiRequest.postWithGraphQL(DocumentId.ZenonMWThriftSendMessageMutation, {
                     input: {
                         endpoint: JSON.stringify({
@@ -43,7 +65,7 @@ export default class VoiceCallManager {
                         }),
                         message: output.toString('base64'),
                         actor_id: ApiRequest.apiStorage.userId,
-                        client_mutation_id: 12 //?
+                        client_mutation_id: sequence //?
                     }
                 });
 
@@ -57,33 +79,20 @@ export default class VoiceCallManager {
                     const body = RtcMessageBody.read(rspCompactProtocol);
 
                     if (header.responseStatusCode !== 200) throw new Error('RTCHeader responded with code ' + header.responseStatusCode);
+
                     if (callback) callback(header, body);
                 }
             })
         );
-
-        const header = new RtcMessageHeader({
-            type: bodyType,
-            transactionId: (Math.floor(Math.random() * 90000000000) + 1).toString(),
-            clientSessionId: this.clientSessionId.toString(),
-            conferenceType: 15, //ConferenceType.ROOM
-            clientStack: 5, //ClientStack.ZENON
-            sender: new RtcSender({
-                id: ApiRequest.apiStorage.userId
-            }),
-            sequenceNumber: this.sequenceNumber++
-        });
-        if (this.serverDataKey) header.serverInfoData = this.serverDataKey;
-        if (this.conferenceName) header.conferenceName = this.conferenceName;
         header.write(compactProtocol);
         body.write(compactProtocol);
         compactProtocol.flush();
     }
 
     public static connectCall(threadId: string) {
-        if (this.conferenceName) throw new Error('Client is already in call');
-        this.clientSessionId = Math.floor(Math.random() * 9000000000) + 1;
-
+        if (this.clientSessionId) throw new Error('Client is already in call');
+        this.clientSessionId = 323041;
+        this.currentAtttendingThreadId = threadId;
         //sessionId, holy hell
 
         const oId = Math.random().toString().substr(2, 22);
@@ -92,7 +101,7 @@ export default class VoiceCallManager {
 
         let sdp = ``;
         sdp += `v=0\r\n`;
-        sdp += `o=- ${oId} 3 IN IP4 127.0.0.1\r\n`;
+        sdp += `o=- ${oId} 3 IN IP4 balls.com\r\n`;
         sdp += `s=-\r\n`;
         sdp += `t=0 0\r\n`;
 
@@ -127,11 +136,11 @@ export default class VoiceCallManager {
         sdp += `a=mid:0\r\n`;
         sdp += `a=msid:${msId} ${msIdSecondPart}\r\n`;
         sdp += `a=sendonly\r\n`;
-        sdp += `a=ice-ufrag:YKJK\r\n`;
-        sdp += `a=ice-pwd:L42a4rsivCLPld9fjBqwMElL\r\n`;
+        sdp += `a=ice-ufrag:balls\r\n`;
+        sdp += `a=ice-pwd:balls\r\n`;
         sdp += `a=fingerprint:sha-256 8C:01:74:C7:99:79:74:A6:20:BE:AA:FE:BB:B5:F3:ED:CA:98:7D:04:25:B5:6E:62:0E:3D:F1:FF:45:A5:AB:9C\r\n`;
         sdp += `a=ice-options:trickle fb-force-5245 renomination\r\n`;
-        sdp += `a=ssrc:1672470091 cname:Iy24dxjlc7xzjBAD\r\n`;
+        sdp += `a=ssrc:1672470091 cname:balls\r\n`;
         sdp += `a=ssrc:1672470091 msid:${msId} ${msIdSecondPart}\r\n`;
         sdp += `a=rtcp-mux\r\n`;
         sdp += `a=rtcp-rsize\r\n`;
@@ -204,8 +213,8 @@ export default class VoiceCallManager {
         sdp += `a=setup:actpass\r\n`;
         sdp += `a=mid:1\r\n`;
         sdp += `a=recvonly\r\n`;
-        sdp += `a=ice-ufrag:YKJK\r\n`;
-        sdp += `a=ice-pwd:L42a4rsivCLPld9fjBqwMElL\r\n`;
+        sdp += `a=ice-ufrag:balls\r\n`;
+        sdp += `a=ice-pwd:balls\r\n`;
         sdp += `a=fingerprint:sha-256 8C:01:74:C7:99:79:74:A6:20:BE:AA:FE:BB:B5:F3:ED:CA:98:7D:04:25:B5:6E:62:0E:3D:F1:FF:45:A5:AB:9C\r\n`;
         sdp += `a=ice-options:trickle\r\n`;
         sdp += `a=rtcp-mux\r\n`;
@@ -214,8 +223,8 @@ export default class VoiceCallManager {
         sdp += `c=IN IP4 0.0.0.0\r\n`;
         sdp += `a=setup:actpass\r\n`;
         sdp += `a=mid:2\r\n`;
-        sdp += `a=ice-ufrag:YKJK\r\n`;
-        sdp += `a=ice-pwd:L42a4rsivCLPld9fjBqwMElL\r\n`;
+        sdp += `a=ice-ufrag:balls\r\n`;
+        sdp += `a=ice-pwd:balls\r\n`;
         sdp += `a=fingerprint:sha-256 8C:01:74:C7:99:79:74:A6:20:BE:AA:FE:BB:B5:F3:ED:CA:98:7D:04:25:B5:6E:62:0E:3D:F1:FF:45:A5:AB:9C\r\n`;
         sdp += `a=ice-options:trickle\r\n`;
         sdp += `a=sctp-port:5000`;
@@ -226,15 +235,15 @@ export default class VoiceCallManager {
                     sessionId: sdp
                 }),
                 userCapabilities: JSON.stringify({
-                    AddParticipantEnabled: false,
+                    AddParticipantEnabled: true,
                     GROUP_COWATCH: true,
                     MultipleVideoStreamsAllowed: true,
                     MW_AV_ESCALATION: true,
                     canApproveCollaborationSpaceJoinRequests: true,
                     cowatch: true,
-                    screen_sharing: false,
-                    sctp_hangup: false,
-                    sctpSecondPc: false
+                    screen_sharing: true,
+                    sctp_hangup: true,
+                    sctpSecondPc: true
                 }),
                 appMessages: [
                     new DataMessage({
@@ -245,14 +254,7 @@ export default class VoiceCallManager {
                             genericMessage: new GenericDataMessage({
                                 topic: 'joining_context',
                                 data: JSON.stringify({
-                                    call_trigger: null,
-                                    group_thread_id: threadId,
-                                    ig_thread_id: null,
-                                    link_url: null,
-                                    live_broadcast_id: null,
-                                    meeting_id: null,
-                                    peer_id: null,
-                                    server_info_data: null
+                                    group_thread_id: threadId
                                 })
                             })
                         })
@@ -261,37 +263,52 @@ export default class VoiceCallManager {
                 mediaStatusEx: new ClientMediaStatus(),
                 syncPayload: new SyncPayload(),
                 e2eeEnforcement: new E2eeEnforcement({
-                    mode: 0,
+                    mode: 1,
                     preventSfuMode: false,
                     infraMandatedExpStatus: 0
                 }),
-                clientMediaMode: 1,
+                clientMediaMode: 0,
                 endpointSettings: new EndpointSettings({
-                    joinMode: 0
+                    joinMode: 1
                 })
             })
         });
+
         VoiceCallManager.sendRtcPacket(MessageType.JOIN, body, (header, body) => {
             this.serverDataKey = header.serverInfoData!;
-            this.conferenceName = header.conferenceName!;
+            this.currentAttendingConferenceName = header.conferenceName!;
         });
     }
 
-    public static disconnectCall() {
-        if (!this.conferenceName) {
-            throw new Error('Client is not in any call.');
-        }
+    public static syncData(topic: string, data: string = '', version: number = 1, topicId: number = 0) {
+        this.sendRtcPacket(
+            MessageType.UPDATE,
+            new RtcMessageBody({
+                updateRequest: new UpdateRequest({
+                    syncPayload: new SyncPayload({}),
+                    topic: topic,
+                    data: data,
+                    version: version,
+                    topicId: topicId
+                })
+            })
+        );
+    }
 
+    public static disconnectCall() {
         VoiceCallManager.sendRtcPacket(
             MessageType.HANGUP,
             new RtcMessageBody({
                 hangupRequest: new HangupRequest({
-                    reason: 1,
+                    reason: 0,
                     detailedReasonString: ''
                 })
             }),
             (header, body) => {
-                this.conferenceName = undefined;
+                this.currentAttendingConferenceName = undefined;
+                this.currentAtttendingThreadId = undefined;
+                this.clientSessionId = undefined;
+                this.serverDataKey = undefined;
             }
         );
     }

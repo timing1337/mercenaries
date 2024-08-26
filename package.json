@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A minimal facebook chat bot",
   "scripts": {
-    "start": "ts-node-dev --transpile-only src/index.ts",
+    "start": "npx tsx ./src/index.ts",
     "gen": "thrift-typescript --target apache --rootDir . --sourceDir . --outDir codegen main.thrift",
     "pretty": "prettier --write src/**/*.ts"
   },
@@ -25,6 +25,7 @@
     "mqtt": "^5.10.0",
     "thrift": "^0.20.0",
     "tough-cookie": "^4.1.4",
+    "tsx": "^4.18.0",
     "ws": "^8.18.0"
   }
 }

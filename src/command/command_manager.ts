@@ -4,9 +4,9 @@ import { EventType } from '../event/event_type';
 import { MessageData } from '../message/message';
 import Logger from '../utils/log';
 import AboutCommand from './defaults/about';
-import DisconnectVoiceCommand from './defaults/voice_disconnect';
 import TraCuuDiemThiCommand from './defaults/tracuudiemthi';
 import VoiceConnectCommand from './defaults/voice_connect';
+import DisconnectVoiceCommand from './defaults/voice_disconnect';
 
 export class CommandManager {
     public static readonly logger: Logger = new Logger('Command');

@@ -1,11 +1,15 @@
 import * as mqtt from 'mqtt';
+import { TCompactProtocol, TFramedTransport } from 'thrift';
 import { WebSocket } from 'ws';
+import { MqttThriftHeader, RtcMessageBody, RtcMessageHeader } from '../../codegen';
 import ApiRequest from '../api/api';
 import { EventManager } from '../event/event_manager';
 import { EventType } from '../event/event_type';
 import ThreadManager from '../thread/thread_manager';
 import Logger from '../utils/log';
-import { TMSData } from './mqtt';
+import { MessageType } from '../voicecall/message_type';
+import VoiceCallManager from '../voicecall/voicecall_manager';
+import { RtcCallData, TMSData } from './mqtt';
 
 const TOPICS = [
     '/legacy_web',
@@ -106,11 +110,41 @@ export class MqttManager {
                 }
                 if (tmsData.deltas) {
                     for (const delta of tmsData.deltas) {
-                        if (delta.class == 'NewMessage') EventManager.call(EventType.NewMessage, delta);
+                        switch (delta.class) {
+                            case 'NewMessage':
+                                EventManager.call(EventType.NewMessage, delta);
+                                break;
+                            case 'RtcCallData':
+                                const rtcCallData = delta as RtcCallData;
+                                const threadId = delta.messageMetadata.threadKey.threadFbId;
+                                if (rtcCallData.callState == 'AUDIO_GROUP_CALL') {
+                                    this.logger.log(`Group calling is happening in thread #${threadId}`);
+                                } else if (rtcCallData.callState == 'NO_ONGOING_CALL') {
+                                }
+                                break;
+                            default:
+                                this.logger.warn(`Unhandled delta: ${delta.class}`);
+                                break;
+                        }
                     }
                 }
                 break;
+            case '/t_rtc_multi':
+                const bufferTransport = new TCompactProtocol(new TFramedTransport(payload));
+
+                const mqttHeader = MqttThriftHeader.read(bufferTransport);
+                const header = RtcMessageHeader.read(bufferTransport);
+                const body = RtcMessageBody.read(bufferTransport);
+
+                //syncing data
+                if (header.receiverUserId != ApiRequest.apiStorage.userId) return;
+                if (!VoiceCallManager.serverDataKey) return; //offline already
+                VoiceCallManager.serverDataKey = header.serverInfoData!;
+                VoiceCallManager.currentAttendingConferenceName = header.conferenceName!;
+                if (header.type == MessageType.DISMISS) VoiceCallManager.disconnectCall();
+                break;
             default:
+                console.log(topic);
         }
     }
 

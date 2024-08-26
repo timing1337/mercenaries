@@ -143,7 +143,8 @@ export default class ApiRequest {
         const content = {
             fb_dtsg: ApiRequest.apiStorage.DTSGInitialData,
             doc_id: documentId,
-            variables: JSON.stringify(variables)
+            variables: JSON.stringify(variables),
+            av: ApiRequest.apiStorage.userId
         };
 
         return await axios.post(URL.GRAPH_QL_URL, new URLSearchParams(content).toString(), {

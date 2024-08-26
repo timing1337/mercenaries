@@ -131,5 +131,4 @@ dist
 
 /credential.json
 /appstate.json
-/src/manager/defaults/ChatGPTCommand.ts
 main.thrift
