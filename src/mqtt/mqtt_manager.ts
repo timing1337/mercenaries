@@ -8,7 +8,6 @@ import { EventType } from '../event/event_type';
 import ThreadManager from '../thread/thread_manager';
 import Logger from '../utils/log';
 import { MessageType } from '../voicecall/message_type';
-import VoiceCallManager from '../voicecall/voicecall_manager';
 import { RtcCallData, TMSData } from './mqtt';
 
 const TOPICS = [
@@ -117,9 +116,18 @@ export class MqttManager {
                             case 'RtcCallData':
                                 const rtcCallData = delta as RtcCallData;
                                 const threadId = delta.messageMetadata.threadKey.threadFbId;
+                                const thread = ThreadManager.threads.get(threadId)!;
                                 if (rtcCallData.callState == 'AUDIO_GROUP_CALL') {
+                                    thread.rtc_call_data.call_state = rtcCallData.callState;
+                                    thread.rtc_call_data.server_info_data = rtcCallData.serverInfoData;
+                                    thread.rtc_call_data.initiator = {
+                                        id: rtcCallData.messageMetadata.actorFbId
+                                    };
                                     this.logger.log(`Group calling is happening in thread #${threadId}`);
                                 } else if (rtcCallData.callState == 'NO_ONGOING_CALL') {
+                                    thread.rtc_call_data.call_state = rtcCallData.callState;
+                                    thread.rtc_call_data.server_info_data = undefined as any; //erm what the freak
+                                    thread.rtc_call_data.initiator = undefined as any; //erm what the freak
                                 }
                                 break;
                             default:
@@ -131,20 +139,14 @@ export class MqttManager {
                 break;
             case '/t_rtc_multi':
                 const bufferTransport = new TCompactProtocol(new TFramedTransport(payload));
-
                 const mqttHeader = MqttThriftHeader.read(bufferTransport);
                 const header = RtcMessageHeader.read(bufferTransport);
                 const body = RtcMessageBody.read(bufferTransport);
-
-                //syncing data
                 if (header.receiverUserId != ApiRequest.apiStorage.userId) return;
-                if (!VoiceCallManager.serverDataKey) return; //offline already
-                VoiceCallManager.serverDataKey = header.serverInfoData!;
-                VoiceCallManager.currentAttendingConferenceName = header.conferenceName!;
-                if (header.type == MessageType.DISMISS) VoiceCallManager.disconnectCall();
+                const eventType = 'MQTT_' + MessageType[header.type!];
+                EventManager.call(eventType as EventType, header, body);
                 break;
             default:
-                console.log(topic);
         }
     }
 

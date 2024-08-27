@@ -18,7 +18,6 @@ export default class ThreadManager {
             this.threads.set(threadId, thread);
 
             if (thread.rtc_call_data.call_state == 'AUDIO_GROUP_CALL') {
-                //VoiceCallManager.serverDataKeys.set(threadId, thread.rtc_call_data.server_info_data);
                 this.logger.log(`Group calling is happening in thread #${threadId}`);
             }
         }
