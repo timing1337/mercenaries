@@ -139,7 +139,7 @@ export default class ApiRequest {
         }
     }
 
-    public static getCookies() { //Features: Login with Appstate (Cookie)
+    public static getCookies() {
         return this.cookieJar.getCookieStringSync(URL.MESSENGER_URL);
     }
 
