@@ -46,16 +46,14 @@ export default class ApiRequest {
     public static async init() {
         axios.defaults.validateStatus = (status) => status >= 200 && status <= 500;
 
-        if (fs.existsSync(APPSTATE_PATH)) {
-            const appstate = JSON.parse(readFileSync(APPSTATE_PATH, 'utf-8'));
-            return await this.loginAppstate(appstate);
-        }
+        let appState;
+        if (fs.existsSync(APPSTATE_PATH)) appState = JSON.parse(readFileSync(APPSTATE_PATH, 'utf-8'));
 
         const credential = JSON.parse(readFileSync(CREDENTIAL_PATH, 'utf-8')) as Credential;
-        await this.login(credential.email, credential.password);
+        await this.login(credential.email, credential.password, appState);
     }
 
-    public static async login(email: string, password: string) {
+    public static async login(email: string, password: string, appState?:any) {
         const data = await axios.get(URL.MESSENGER_URL, {});
 
         ApiRequest.apiStorage.jazoest = (data.data as string).match(/name="jazoest" value="(\d+)"/)![1];
@@ -89,91 +87,47 @@ export default class ApiRequest {
             URL.MESSENGER_URL
         );
 
-        const postBody = {
-            jazoest: ApiRequest.apiStorage.jazoest,
-            lsd: ApiRequest.apiStorage.lsd,
-            initial_request_id: initialRequestId,
-            timezone: -420,
-            lgndim: 'eyJ3IjoxNTM2LCJoIjo4NjQsImF3IjoxNTM2LCJhaCI6ODE2LCJjIjoyNH0=', //base64 of some random ass data but whatever lol
-            lgnrnd: lgnrnd,
-            lgnjs: lgnjs,
-            email: email,
-            pass: password,
-            default_persistent: ''
-        };
+        if (appState) {
+            for (const cookie of appState) {
+                if (cookie.name == 'c_user') ApiRequest.apiStorage.userId = cookie.value;
+                if (['dpr', 'wd', 'datr'].indexOf(cookie.name) != -1) continue;
+                this.cookieJar.setCookie(new Cookie({
+                    key: cookie.name,
+                    value: cookie.value
+                }), URL.MESSENGER_URL);
+            }
+        } else {
+            const postBody = {
+                jazoest: ApiRequest.apiStorage.jazoest,
+                lsd: ApiRequest.apiStorage.lsd,
+                initial_request_id: initialRequestId,
+                timezone: -420,
+                lgndim: 'eyJ3IjoxNTM2LCJoIjo4NjQsImF3IjoxNTM2LCJhaCI6ODE2LCJjIjoyNH0=', //base64 of some random ass data but whatever lol
+                lgnrnd: lgnrnd,
+                lgnjs: lgnjs,
+                email: email,
+                pass: password,
+                default_persistent: ''
+            };
 
-        const result = await axios.post(URL.LOGIN_URL, new URLSearchParams(postBody as any).toString(), {
-            headers: {
-                Cookie: ApiRequest.getCookies()
-            },
-            maxRedirects: 0
-        });
+            const result = await axios.post(URL.LOGIN_URL, new URLSearchParams(postBody as any).toString(), {
+                headers: {
+                    Cookie: ApiRequest.getCookies()
+                },
+                maxRedirects: 0
+            });
 
-        if (result.headers['set-cookie']) {
-            for (const cookie of result.headers['set-cookie']) {
-                const cookieData = cookie.split(';').shift()!.split('=')!;
-                if (cookieData[0] == 'c_user') ApiRequest.apiStorage.userId = cookieData[1];
-                this.cookieJar.setCookie(cookie, URL.MESSENGER_URL);
+            if (result.headers['set-cookie']) {
+                for (const cookie of result.headers['set-cookie']) {
+                    const cookieData = cookie.split(';').shift()!.split('=')!;
+                    if (cookieData[0] == 'c_user') ApiRequest.apiStorage.userId = cookieData[1];
+                    this.cookieJar.setCookie(cookie, URL.MESSENGER_URL);
+                }
             }
         }
 
         const reloadPage = await ApiRequest.get(URL.MESSENGER_URL);
 
-
-        try {
-            ApiRequest.apiStorage.DTSGInitialData = (reloadPage.data as string).match(/"DTSGInitialData",\[\],\{"token":"([^"]+)"/)![1];
-            ApiRequest.apiStorage.deviceId = (reloadPage.data as string).match(/"deviceId":"([^"]+)"/)![1];
-            ApiRequest.apiStorage.region = (reloadPage.data as string).match(/region=([a-zA-Z0-9]+)/)![1];
-        } catch (error) {
-            this.logger.error("There was an error in the login process, please try again later!");
-            throw new Error(error + '');
-        }
-    }
-
-    public static async loginAppstate(appstate: any) {
-        const data = await axios.get(URL.MESSENGER_URL, {});
-
-        ApiRequest.apiStorage.jazoest = (data.data as string).match(/name="jazoest" value="(\d+)"/)![1];
-        ApiRequest.apiStorage.lsd = (data.data as string).match(/name="lsd" value="([^"]+)"/)![1];
-        const datr = (data.data as string).match(/"_js_datr","([^"]+)"/)![1];
-        const initialRequestId = (data.data as string).match(/name="initial_request_id" value="([^"]+)"/)![1];
-        const lgnrnd = (data.data as string).match(/name="lgnrnd" value="([^"]+)"/)![1];
-        const lgnjs = (data.data as string).match(/name="lgnjs" value="([^"]+)"/)![1];
-
-        this.cookieJar.setCookie(
-            new Cookie({
-                key: 'datr',
-                value: datr
-            }),
-            URL.MESSENGER_URL
-        );
-
-        this.cookieJar.setCookie(
-            new Cookie({
-                key: 'wd',
-                value: '727x730'
-            }),
-            URL.MESSENGER_URL
-        );
-
-        this.cookieJar.setCookie(
-            new Cookie({
-                key: 'dpr',
-                value: '1.25'
-            }),
-            URL.MESSENGER_URL
-        );
-
-        for (const cookie of appstate) {
-            if (cookie.name == 'c_user') ApiRequest.apiStorage.userId = cookie.value;
-            if (['dpr', 'wd', 'datr'].indexOf(cookie.name) != -1) continue;
-            this.cookieJar.setCookie(new Cookie({
-                key: cookie.name,
-                value: cookie.value
-            }), URL.MESSENGER_URL);
-        }
-
-        const reloadPage = await ApiRequest.get(URL.MESSENGER_URL);
 
         try {
             ApiRequest.apiStorage.DTSGInitialData = (reloadPage.data as string).match(/"DTSGInitialData",\[\],\{"token":"([^"]+)"/)![1];
@@ -228,7 +182,6 @@ export default class ApiRequest {
 function ensureExists(base: string, content = '', mask = 0o777) {
     base = path.normalize(base);
     let baseInfo = path.parse(base);
-
     if (baseInfo.ext != '') {
         ensureExists(baseInfo.dir);
         if (!fs.existsSync(base))
@@ -242,7 +195,6 @@ function ensureExists(base: string, content = '', mask = 0o777) {
             }
         return;
     }
-
     if (typeof mask != 'number') {
         mask = 0o777;
     }
