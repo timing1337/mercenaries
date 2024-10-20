@@ -1,6 +1,7 @@
 import * as mqtt from 'mqtt';
 import { TCompactProtocol, TFramedTransport } from 'thrift';
 import { WebSocket } from 'ws';
+import crypto from 'crypto';
 import { MqttThriftHeader, RtcMessageBody, RtcMessageHeader } from '../../codegen';
 import ApiRequest from '../api/api';
 import { EventManager } from '../event/event_manager';

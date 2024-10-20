@@ -1,9 +1,10 @@
 import axios from 'axios';
-import { readFileSync } from 'fs';
+import fs from 'fs'; const { readFileSync } = fs;
 import path from 'path';
 import { Cookie, CookieJar } from 'tough-cookie';
 import { URLSearchParams } from 'url';
 import { URL } from '../utils/utils';
+import Logger from '../utils/log';
 import { DocumentId } from './document';
 
 type Credential = {
@@ -20,10 +21,18 @@ type ApiStorage = {
     userId: string;
 };
 
+
+
 const CREDENTIAL_PATH = path.join(__dirname, '..', '..', 'credential.json');
 const APPSTATE_PATH = path.join(__dirname, '..', '..', 'appstate.json');
 
+ensureExists(CREDENTIAL_PATH, JSON.stringify({
+    email: '',
+    password: ''
+}, null, 4));
+
 export default class ApiRequest {
+    public static logger: Logger = new Logger('Login');
     public static readonly cookieJar: CookieJar = new CookieJar();
     public static readonly apiStorage: ApiStorage = {
         jazoest: '',
@@ -36,6 +45,12 @@ export default class ApiRequest {
 
     public static async init() {
         axios.defaults.validateStatus = (status) => status >= 200 && status <= 500;
+
+        if (fs.existsSync(APPSTATE_PATH)) {
+            const appstate = JSON.parse(readFileSync(APPSTATE_PATH, 'utf-8'));
+            return await this.loginAppstate(appstate);
+        }
+
         const credential = JSON.parse(readFileSync(CREDENTIAL_PATH, 'utf-8')) as Credential;
         await this.login(credential.email, credential.password);
     }
@@ -104,12 +119,73 @@ export default class ApiRequest {
 
         const reloadPage = await ApiRequest.get(URL.MESSENGER_URL);
 
-        ApiRequest.apiStorage.DTSGInitialData = (reloadPage.data as string).match(/"DTSGInitialData",\[\],\{"token":"([^"]+)"/)![1];
-        ApiRequest.apiStorage.deviceId = (reloadPage.data as string).match(/"deviceId":"([^"]+)"/)![1];
-        ApiRequest.apiStorage.region = (reloadPage.data as string).match(/region=([a-zA-Z0-9]+)/)![1];
+
+        try {
+            ApiRequest.apiStorage.DTSGInitialData = (reloadPage.data as string).match(/"DTSGInitialData",\[\],\{"token":"([^"]+)"/)![1];
+            ApiRequest.apiStorage.deviceId = (reloadPage.data as string).match(/"deviceId":"([^"]+)"/)![1];
+            ApiRequest.apiStorage.region = (reloadPage.data as string).match(/region=([a-zA-Z0-9]+)/)![1];
+        } catch (error) {
+            this.logger.error("There was an error in the login process, please try again later!");
+            throw new Error(error + '');
+        }
     }
 
-    public static getCookies() {
+    public static async loginAppstate(appstate: any) {
+        const data = await axios.get(URL.MESSENGER_URL, {});
+
+        ApiRequest.apiStorage.jazoest = (data.data as string).match(/name="jazoest" value="(\d+)"/)![1];
+        ApiRequest.apiStorage.lsd = (data.data as string).match(/name="lsd" value="([^"]+)"/)![1];
+        const datr = (data.data as string).match(/"_js_datr","([^"]+)"/)![1];
+        const initialRequestId = (data.data as string).match(/name="initial_request_id" value="([^"]+)"/)![1];
+        const lgnrnd = (data.data as string).match(/name="lgnrnd" value="([^"]+)"/)![1];
+        const lgnjs = (data.data as string).match(/name="lgnjs" value="([^"]+)"/)![1];
+
+        this.cookieJar.setCookie(
+            new Cookie({
+                key: 'datr',
+                value: datr
+            }),
+            URL.MESSENGER_URL
+        );
+
+        this.cookieJar.setCookie(
+            new Cookie({
+                key: 'wd',
+                value: '727x730'
+            }),
+            URL.MESSENGER_URL
+        );
+
+        this.cookieJar.setCookie(
+            new Cookie({
+                key: 'dpr',
+                value: '1.25'
+            }),
+            URL.MESSENGER_URL
+        );
+
+        for (const cookie of appstate) {
+            if (cookie.name == 'c_user') ApiRequest.apiStorage.userId = cookie.value;
+            if (['dpr', 'wd', 'datr'].indexOf(cookie.name) != -1) continue;
+            this.cookieJar.setCookie(new Cookie({
+                key: cookie.name,
+                value: cookie.value
+            }), URL.MESSENGER_URL);
+        }
+
+        const reloadPage = await ApiRequest.get(URL.MESSENGER_URL);
+
+        try {
+            ApiRequest.apiStorage.DTSGInitialData = (reloadPage.data as string).match(/"DTSGInitialData",\[\],\{"token":"([^"]+)"/)![1];
+            ApiRequest.apiStorage.deviceId = (reloadPage.data as string).match(/"deviceId":"([^"]+)"/)![1];
+            ApiRequest.apiStorage.region = (reloadPage.data as string).match(/region=([a-zA-Z0-9]+)/)![1];
+        } catch (error) {
+            this.logger.error("There was an error in the login process, please try again later!");
+            throw new Error(error + '');
+        }
+    }
+
+    public static getCookies() { //Features: Login with Appstate (Cookie)
         return this.cookieJar.getCookieStringSync(URL.MESSENGER_URL);
     }
 
@@ -146,5 +222,39 @@ export default class ApiRequest {
                 'x-fb-lsd': ApiRequest.apiStorage.lsd
             }
         });
+    }
+}
+
+function ensureExists(base: string, content = '', mask = 0o777) {
+    base = path.normalize(base);
+    let baseInfo = path.parse(base);
+
+    if (baseInfo.ext != '') {
+        ensureExists(baseInfo.dir);
+        if (!fs.existsSync(base))
+            try {
+                fs.writeFileSync(base, content);
+                return;
+            } catch (ex) {
+                return {
+                    err: ex
+                }
+            }
+        return;
+    }
+
+    if (typeof mask != 'number') {
+        mask = 0o777;
+    }
+    try {
+        fs.mkdirSync(base, {
+            mode: mask,
+            recursive: true
+        });
+        return;
+    } catch (ex) {
+        return {
+            err: ex
+        };
     }
 }
